@@ -4,9 +4,10 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
+  databaseProvider,
   deleteMyCard,
   findMyCardByPlayerId,
-  getStoredPlayer,
+  initDatabase,
   loadMyCards,
   loadPersistedPlayers,
   saveMyCard,
@@ -27,7 +28,7 @@ type MyCard = {
 
 const app = express();
 const port = Number(process.env.PORT ?? 3333);
-let myCards: MyCard[] = loadMyCards();
+let myCards: MyCard[] = [];
 
 const bestLineupCandidateSlots = [
   { positions: ["PTE", "CA", "SA", "MLE"], limit: 24 },
@@ -45,12 +46,8 @@ const bestLineupCandidateSlots = [
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-for (const persistedPlayer of loadPersistedPlayers()) {
-  upsertCachedPlayer(persistedPlayer, { persist: false });
-}
-
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, app: "Hubball API" });
+  res.json({ ok: true, app: "Hubball API", database: databaseProvider });
 });
 
 app.get("/api/players", (req, res) => {
@@ -130,7 +127,7 @@ app.get("/api/my-cards", (_req, res) => {
   res.json(hydrateMyCards());
 });
 
-app.post("/api/my-cards", (req, res) => {
+app.post("/api/my-cards", async (req, res) => {
   const { playerId, nickname, level, customNotes } = req.body as Partial<MyCard>;
 
   if (!playerId || !players.some((player) => player.id === playerId)) {
@@ -153,14 +150,14 @@ app.post("/api/my-cards", (req, res) => {
     addedAt: new Date().toISOString()
   };
 
-  saveMyCard(card);
+  await saveMyCard(card);
   myCards = [card, ...myCards];
   res.status(201).json(hydrateMyCard(card));
 });
 
-app.delete("/api/my-cards/:id", (req, res) => {
+app.delete("/api/my-cards/:id", async (req, res) => {
   const before = myCards.length;
-  const removedFromDatabase = deleteMyCard(req.params.id);
+  const removedFromDatabase = await deleteMyCard(req.params.id);
   myCards = myCards.filter((card) => card.id !== req.params.id);
 
   if (!removedFromDatabase && myCards.length === before) {
@@ -196,9 +193,11 @@ app.post("/api/import/efhub-link", async (req, res) => {
 
   try {
     const importedPlayer = await importPlayerFromEfhubLink(url);
-    upsertCachedPlayer(importedPlayer);
+    await upsertCachedPlayer(importedPlayer);
 
-    const existingCard = myCards.find((card) => card.playerId === importedPlayer.id) ?? findMyCardByPlayerId(importedPlayer.id);
+    const existingCard =
+      myCards.find((card) => card.playerId === importedPlayer.id) ??
+      (await findMyCardByPlayerId(importedPlayer.id));
     const card =
       existingCard ??
       ({
@@ -208,7 +207,7 @@ app.post("/api/import/efhub-link", async (req, res) => {
       } satisfies MyCard);
 
     if (!existingCard) {
-      saveMyCard(card);
+      await saveMyCard(card);
       myCards = [card, ...myCards];
     } else if (!myCards.some((item) => item.id === existingCard.id)) {
       myCards = [existingCard, ...myCards];
@@ -237,16 +236,30 @@ if (existsSync(clientIndexPath)) {
   });
 }
 
-app.listen(port, () => {
-  console.log(`Hubball API running on http://localhost:${port}`);
+bootstrap().catch((error) => {
+  console.error("Hubball API failed to start", error);
+  process.exit(1);
 });
+
+async function bootstrap() {
+  await initDatabase();
+  myCards = await loadMyCards();
+
+  for (const persistedPlayer of await loadPersistedPlayers()) {
+    await upsertCachedPlayer(persistedPlayer, { persist: false });
+  }
+
+  app.listen(port, () => {
+    console.log(`Hubball API running on http://localhost:${port} using ${databaseProvider}`);
+  });
+}
 
 function hydrateMyCards() {
   return myCards.map(hydrateMyCard).filter(isHydratedCard);
 }
 
 function hydrateMyCard(card: MyCard) {
-  const player = players.find((item) => item.id === card.playerId) ?? getStoredPlayer(card.playerId);
+  const player = players.find((item) => item.id === card.playerId);
 
   if (!player) {
     return null;
@@ -309,7 +322,7 @@ async function importEfhubCandidateCards(candidates: EfhubSearchResult[]) {
         const importedPlayer = cachedPlayer?.maxAttributes
           ? cachedPlayer
           : await importPlayerFromEfhubLink(candidate.sourceUrl);
-        upsertCachedPlayer(importedPlayer);
+        await upsertCachedPlayer(importedPlayer);
         importedPlayers.push(importedPlayer);
       } catch {
         failedIds.add(candidate.id);
@@ -326,7 +339,7 @@ async function importEfhubCandidateCards(candidates: EfhubSearchResult[]) {
   return importedPlayers.sort((first, second) => second.maxOverall - first.maxOverall);
 }
 
-function upsertCachedPlayer(player: PlayerCard, options: { persist?: boolean } = {}) {
+async function upsertCachedPlayer(player: PlayerCard, options: { persist?: boolean } = {}) {
   const existingIndex = players.findIndex((item) => item.id === player.id);
 
   if (existingIndex >= 0) {
@@ -336,7 +349,7 @@ function upsertCachedPlayer(player: PlayerCard, options: { persist?: boolean } =
   }
 
   if (options.persist !== false) {
-    upsertPlayerCard(player);
+    await upsertPlayerCard(player);
   }
 }
 

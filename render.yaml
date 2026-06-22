@@ -2,16 +2,12 @@ services:
   - type: web
     name: hubball
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: HUBBALL_DATA_DIR
-        value: /var/data
-    disk:
-      name: hubball-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        sync: false

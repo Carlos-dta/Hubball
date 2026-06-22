@@ -15,32 +15,33 @@ API: `http://localhost:3333`
 
 Na mesma rede Wi-Fi, use o IP da maquina no lugar de `localhost`, por exemplo: `http://192.168.70.128:5174`.
 
-## Publicar no Render
+## Publicar gratis no Render
 
-O Hubball e um app full-stack: React + Express + SQLite. Por isso, publique como **Web Service** no Render, nao como Static Site/GitHub Pages.
+O Hubball e um app full-stack: React + Express + banco. Por isso, publique como **Web Service** no Render, nao como Static Site/GitHub Pages.
 
 O projeto ja inclui `render.yaml` com:
 
 - Build Command: `npm ci && npm run build`
 - Start Command: `npm start`
 - Health Check: `/api/health`
-- Banco local em `/var/data` via `HUBBALL_DATA_DIR`
-- Disco persistente em `/var/data`
+- Plano Render Free
+- Banco externo por `DATABASE_URL`
 
 Passos:
 
-1. Suba este projeto para um repositorio no GitHub.
-2. No Render, crie um novo **Blueprint** ou **Web Service** conectado ao repositorio.
-3. Se usar Blueprint, o Render vai ler o `render.yaml`.
-4. Se criar manualmente, use:
+1. Crie um banco Postgres gratis no Neon ou Supabase.
+2. Copie a connection string do banco.
+3. No Render, crie um novo **Blueprint** ou **Web Service** conectado ao repositorio.
+4. Se usar Blueprint, o Render vai ler o `render.yaml` e pedir a variavel `DATABASE_URL`.
+5. Cole a connection string no campo `DATABASE_URL`.
+6. Se criar manualmente, use:
    - Runtime: Node
    - Build Command: `npm ci && npm run build`
    - Start Command: `npm start`
    - Health Check Path: `/api/health`
-   - Environment Variable: `HUBBALL_DATA_DIR=/var/data`
-   - Persistent Disk: mount path `/var/data`
+   - Environment Variable: `DATABASE_URL=<connection string do Postgres>`
 
-Observacao: para manter o SQLite salvo depois de redeploy/restart, o Render precisa de disco persistente. Sem isso, as cartas podem ser perdidas porque o filesystem do servico e temporario.
+Localmente, sem `DATABASE_URL`, o Hubball usa SQLite em `server/storage/hubball.sqlite`. No Render Free, use `DATABASE_URL` para salvar as cartas fora do filesystem temporario do Render.
 
 ## O que ja funciona
 
