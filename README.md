@@ -53,7 +53,7 @@ Localmente, sem `DATABASE_URL`, o Hubball usa SQLite em `server/storage/hubball.
 - Adicionar/remover cartas da sua colecao.
 - Gerar e copiar um prompt completo para o ChatGPT analisar seu elenco.
 - Gerar um prompt compacto experimental de analise de elenco, com filtros, ordenacao, marcadores, copiar e baixar `.txt`.
-- Usar a tela "Comparar times" para montar 2 ou mais escalacoes com formacao escolhida, 11 titulares, banco de 12 reservas, slots clicaveis, busca EFHub por posicao, botao experimental "Melhor EFHub" com analise de ate 10.000 cartas, ate 10 substitutos sugeridos por slot e prompt proprio da escalacao.
+- Usar a tela "Laboratorio" para montar 2 ou mais escalacoes com formacao escolhida, 11 titulares, banco de 12 reservas, slots clicaveis, busca EFHub por posicao, botao experimental "Melhor EFHub" com analise de ate 10.000 cartas, ate 10 substitutos sugeridos por slot e prompt proprio da escalacao.
 - Importar uma carta por link do EFHub e adicionar direto na colecao.
 
 ## Endpoints principais

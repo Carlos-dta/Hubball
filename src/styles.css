@@ -1074,19 +1074,19 @@ button:disabled {
 
 .lineup-result-card {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  min-height: 78px;
-  padding: 8px;
+  min-height: 102px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #0e1210;
 }
 
 .lineup-result-card img {
-  width: 48px;
-  height: 62px;
+  width: 64px;
+  height: 82px;
   object-fit: contain;
   border-radius: 5px;
   background: #0b0e0d;
@@ -1095,7 +1095,7 @@ button:disabled {
 .lineup-result-card > div {
   display: grid;
   min-width: 0;
-  gap: 2px;
+  gap: 4px;
 }
 
 .lineup-result-card strong,

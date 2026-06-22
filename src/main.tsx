@@ -954,7 +954,7 @@ function App() {
               onClick={() => setCurrentView("lineup")}
             >
               <Users size={16} />
-              Comparar times
+              Laboratorio
             </button>
           </nav>
           <div className="topbar-metrics" aria-label="Resumo">
@@ -1485,11 +1485,11 @@ function LineupComparePage({
   const formationConfig = getLineupFormation(formation);
 
   return (
-    <section className="lineup-page" aria-label="Comparar times">
+    <section className="lineup-page" aria-label="Laboratorio">
       <div className="lineup-page-header">
         <div className="section-title">
           <Shield size={18} />
-          <h2>Comparar times</h2>
+          <h2>Laboratorio</h2>
         </div>
         <div className="lineup-team-tabs" aria-label="Times">
           {teams.map((team) => (
