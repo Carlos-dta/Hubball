@@ -1,0 +1,70 @@
+# Hubball
+
+Hubball e um MVP para organizar cartas do eFootball, montar uma colecao pessoal e gerar um prompt pronto para analise no ChatGPT.
+
+## Rodar localmente
+
+```bash
+npm install
+npm run dev
+```
+
+Frontend: `http://localhost:5174`
+
+API: `http://localhost:3333`
+
+Na mesma rede Wi-Fi, use o IP da maquina no lugar de `localhost`, por exemplo: `http://192.168.70.128:5174`.
+
+## O que ja funciona
+
+- Buscar cartas direto no EFHub pelo nome e importar o resultado escolhido.
+- Ver sua colecao como galeria de cartas.
+- Salvar cartas importadas e sua colecao em SQLite local com Drizzle, evitando perda ao reiniciar o servidor.
+- Selecionar uma carta da colecao para ver atributos, mapa de posicoes, habilidades e boosters.
+- Alternar entre atributos base e build MAX quando a carta importada tiver nivel maximo.
+- Adicionar/remover cartas da sua colecao.
+- Gerar e copiar um prompt completo para o ChatGPT analisar seu elenco.
+- Gerar um prompt compacto experimental de analise de elenco, com filtros, ordenacao, marcadores, copiar e baixar `.txt`.
+- Usar a tela "Comparar times" para montar 2 ou mais escalacoes com formacao escolhida, 11 titulares, banco de 12 reservas, slots clicaveis, busca EFHub por posicao, botao experimental "Melhor EFHub" com analise de ate 10.000 cartas, ate 10 substitutos sugeridos por slot e prompt proprio da escalacao.
+- Importar uma carta por link do EFHub e adicionar direto na colecao.
+
+## Endpoints principais
+
+```txt
+GET    /api/health
+GET    /api/players?search=messi&position=SA
+GET    /api/players/:id
+GET    /api/efhub/search?q=messi&limit=24&page=1
+GET    /api/efhub/best-players?scan=10000
+GET    /api/my-cards
+POST   /api/my-cards
+DELETE /api/my-cards/:id
+POST   /api/exports/chatgpt
+POST   /api/import/efhub-link
+```
+
+## Banco local
+
+O banco fica em `server/storage/hubball.sqlite`. O Hubball verifica a carta pelo `playerId`: se ela ja existir, atualiza os dados importados; se nao existir, salva uma nova carta. A colecao tambem evita duplicidade por `playerId`.
+
+## Proximas etapas sugeridas
+
+- Importar cartas por CSV.
+- Melhorar o importador caso o EFHub mude o formato interno da pagina.
+- Criar comparador de jogadores e sugestao automatica de titulares por formacao.
+
+## Observacoes sobre importacao EFHub
+
+O importador usa os dados que a pagina do EFHub envia no HTML da carta. Atualmente ele extrai nome, time/competicao, posicao principal, overall exibido, atributos, altura, peso, idade, pe, condicao, estilo de jogo, habilidades e imagem.
+
+A busca do EFHub usa o endpoint publico de listagem de jogadores do site. O Hubball abre uma sessao publica antes da busca e retorna resultados paginados para voce carregar todas as versoes da carta.
+
+Quando a pagina informa `levelCap`, o Hubball calcula uma build MAX com a mesma ideia do EFHub: pontos disponiveis por nivel, custo dos sliders e distribuicao para maximizar o overall da posicao principal.
+
+No momento, o calculo MAX considera o tecnico padrao D. Stojkovic, usando QuickCounter 88 e o boost de tecnico Forca do chute +1. Quando a carta informa booster proprio no EFHub, o Hubball tambem busca esse booster em `/data/boosts.json` e aplica o bonus na build MAX.
+
+O prompt exportado inclui dados fisicos, mapa de posicoes base/MAX, build MAX, sliders, tecnico, boosters, link EFHub e todos os atributos base/MAX separados por grupo.
+
+A area experimental "Analise de elenco" gera um prompt mais compacto: a lista geral usa apenas informacoes essenciais, atributos maximos relevantes e habilidades-chave. Atributos completos entram apenas nas cartas marcadas como importantes no painel.
+
+As posicoes adicionais entram nas observacoes como familiaridade, porque o Hubball ainda nao calcula a nota exata em cada posicao.
