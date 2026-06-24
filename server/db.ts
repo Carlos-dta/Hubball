@@ -31,12 +31,15 @@ type CardStore = {
   kind: "postgres" | "sqlite";
   init: () => Promise<void>;
   loadPersistedPlayers: () => Promise<PlayerCard[]>;
+  loadSavedPlayers: () => Promise<PlayerCard[]>;
   getStoredPlayer: (playerId: string) => Promise<PlayerCard | null>;
   upsertPlayerCard: (player: PlayerCard) => Promise<void>;
+  savePlayerToLibrary: (playerId: string) => Promise<void>;
   loadMyCards: () => Promise<PersistedMyCard[]>;
   findMyCardByPlayerId: (playerId: string) => Promise<PersistedMyCard | null>;
   saveMyCard: (card: PersistedMyCard) => Promise<void>;
   deleteMyCard: (cardId: string) => Promise<boolean>;
+  clearMyCards: () => Promise<void>;
 };
 
 export const playerCardsTable = sqliteTable("player_cards", {
@@ -54,6 +57,11 @@ export const myCardsTable = sqliteTable("my_cards", {
   addedAt: text("added_at").notNull()
 });
 
+export const savedCardsTable = sqliteTable("saved_cards", {
+  playerId: text("player_id").primaryKey(),
+  savedAt: text("saved_at").notNull()
+});
+
 const store = process.env.DATABASE_URL ? createPostgresStore(process.env.DATABASE_URL) : createSqliteStore();
 export const databaseProvider = store.kind;
 
@@ -65,12 +73,20 @@ export function loadPersistedPlayers() {
   return store.loadPersistedPlayers();
 }
 
+export function loadSavedPlayers() {
+  return store.loadSavedPlayers();
+}
+
 export function getStoredPlayer(playerId: string) {
   return store.getStoredPlayer(playerId);
 }
 
 export function upsertPlayerCard(player: PlayerCard) {
   return store.upsertPlayerCard(player);
+}
+
+export function savePlayerToLibrary(playerId: string) {
+  return store.savePlayerToLibrary(playerId);
 }
 
 export function loadMyCards() {
@@ -87,6 +103,10 @@ export function saveMyCard(card: PersistedMyCard) {
 
 export function deleteMyCard(cardId: string) {
   return store.deleteMyCard(cardId);
+}
+
+export function clearMyCards() {
+  return store.clearMyCards();
 }
 
 function createSqliteStore(): CardStore {
@@ -116,7 +136,16 @@ CREATE TABLE IF NOT EXISTS my_cards (
   added_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS saved_cards (
+  player_id TEXT PRIMARY KEY NOT NULL,
+  saved_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_cards_saved_at ON saved_cards (saved_at DESC);
+
+INSERT OR IGNORE INTO saved_cards (player_id, saved_at)
+SELECT player_id, added_at FROM my_cards;
 `);
     },
     async loadPersistedPlayers() {
@@ -125,6 +154,18 @@ CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
         .from(playerCardsTable)
         .all()
         .map((row) => row.data);
+    },
+    async loadSavedPlayers() {
+      const rows = sqlite
+        .prepare(
+          `SELECT player_cards.data
+           FROM saved_cards
+           INNER JOIN player_cards ON player_cards.id = saved_cards.player_id
+           ORDER BY saved_cards.saved_at DESC`
+        )
+        .all() as Array<{ data: PlayerCard | string }>;
+
+      return rows.map((row) => parsePlayerData(row.data));
     },
     async getStoredPlayer(playerId: string) {
       return db.select().from(playerCardsTable).where(eq(playerCardsTable.id, playerId)).get()?.data ?? null;
@@ -137,6 +178,17 @@ CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
         .onConflictDoUpdate({
           target: playerCardsTable.id,
           set: { data: player, updatedAt }
+        })
+        .run();
+    },
+    async savePlayerToLibrary(playerId: string) {
+      const savedAt = new Date().toISOString();
+
+      db.insert(savedCardsTable)
+        .values({ playerId, savedAt })
+        .onConflictDoUpdate({
+          target: savedCardsTable.playerId,
+          set: { savedAt }
         })
         .run();
     },
@@ -170,6 +222,9 @@ CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
       const result = sqlite.prepare("DELETE FROM my_cards WHERE id = ?").run(cardId);
 
       return result.changes > 0;
+    },
+    async clearMyCards() {
+      sqlite.prepare("DELETE FROM my_cards").run();
     }
   };
 }
@@ -200,12 +255,32 @@ CREATE TABLE IF NOT EXISTS my_cards (
   added_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS saved_cards (
+  player_id TEXT PRIMARY KEY NOT NULL,
+  saved_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_cards_saved_at ON saved_cards (saved_at DESC);
+
+INSERT INTO saved_cards (player_id, saved_at)
+SELECT player_id, added_at FROM my_cards
+ON CONFLICT (player_id) DO NOTHING;
 `);
     },
     async loadPersistedPlayers() {
       const result = await pool.query<{ data: PlayerCard | string }>(
         "SELECT data FROM player_cards ORDER BY updated_at DESC"
+      );
+
+      return result.rows.map((row) => parsePlayerData(row.data));
+    },
+    async loadSavedPlayers() {
+      const result = await pool.query<{ data: PlayerCard | string }>(
+        `SELECT player_cards.data
+         FROM saved_cards
+         INNER JOIN player_cards ON player_cards.id = saved_cards.player_id
+         ORDER BY saved_cards.saved_at DESC`
       );
 
       return result.rows.map((row) => parsePlayerData(row.data));
@@ -224,6 +299,14 @@ CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
          VALUES ($1, $2::jsonb, $3)
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
         [player.id, JSON.stringify(player), new Date().toISOString()]
+      );
+    },
+    async savePlayerToLibrary(playerId: string) {
+      await pool.query(
+        `INSERT INTO saved_cards (player_id, saved_at)
+         VALUES ($1, $2)
+         ON CONFLICT (player_id) DO UPDATE SET saved_at = EXCLUDED.saved_at`,
+        [playerId, new Date().toISOString()]
       );
     },
     async loadMyCards() {
@@ -268,6 +351,9 @@ CREATE INDEX IF NOT EXISTS idx_my_cards_added_at ON my_cards (added_at DESC);
       const result = await pool.query("DELETE FROM my_cards WHERE id = $1", [cardId]);
 
       return (result.rowCount ?? 0) > 0;
+    },
+    async clearMyCards() {
+      await pool.query("DELETE FROM my_cards");
     }
   };
 }

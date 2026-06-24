@@ -4,13 +4,16 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
+  clearMyCards,
   databaseProvider,
   deleteMyCard,
   findMyCardByPlayerId,
   initDatabase,
   loadMyCards,
   loadPersistedPlayers,
+  loadSavedPlayers,
   saveMyCard,
+  savePlayerToLibrary,
   upsertPlayerCard
 } from "./db.js";
 import { players, type PlayerCard } from "./data/players.js";
@@ -127,17 +130,26 @@ app.get("/api/my-cards", (_req, res) => {
   res.json(hydrateMyCards());
 });
 
+app.get("/api/card-library", async (_req, res) => {
+  try {
+    res.json(await loadSavedPlayers());
+  } catch (error) {
+    res.status(500).json({ message: getErrorMessage(error) });
+  }
+});
+
 app.post("/api/my-cards", async (req, res) => {
   const { playerId, nickname, level, customNotes } = req.body as Partial<MyCard>;
+  const player = players.find((item) => item.id === playerId);
 
-  if (!playerId || !players.some((player) => player.id === playerId)) {
+  if (!playerId || !player) {
     res.status(400).json({ message: "playerId invalido." });
     return;
   }
 
   const alreadyAdded = myCards.some((card) => card.playerId === playerId);
   if (alreadyAdded) {
-    res.status(409).json({ message: "Essa carta ja esta na sua colecao." });
+    res.status(409).json({ message: "Essa carta ja esta no elenco para analise." });
     return;
   }
 
@@ -150,9 +162,17 @@ app.post("/api/my-cards", async (req, res) => {
     addedAt: new Date().toISOString()
   };
 
+  await upsertPlayerCard(player);
+  await savePlayerToLibrary(playerId);
   await saveMyCard(card);
   myCards = [card, ...myCards];
   res.status(201).json(hydrateMyCard(card));
+});
+
+app.delete("/api/my-cards", async (_req, res) => {
+  await clearMyCards();
+  myCards = [];
+  res.status(204).send();
 });
 
 app.delete("/api/my-cards/:id", async (req, res) => {
@@ -161,7 +181,7 @@ app.delete("/api/my-cards/:id", async (req, res) => {
   myCards = myCards.filter((card) => card.id !== req.params.id);
 
   if (!removedFromDatabase && myCards.length === before) {
-    res.status(404).json({ message: "Carta nao encontrada na colecao." });
+    res.status(404).json({ message: "Carta nao encontrada no elenco para analise." });
     return;
   }
 
@@ -194,6 +214,7 @@ app.post("/api/import/efhub-link", async (req, res) => {
   try {
     const importedPlayer = await importPlayerFromEfhubLink(url);
     await upsertCachedPlayer(importedPlayer);
+    await savePlayerToLibrary(importedPlayer.id);
 
     const existingCard =
       myCards.find((card) => card.playerId === importedPlayer.id) ??
@@ -216,8 +237,8 @@ app.post("/api/import/efhub-link", async (req, res) => {
     res.status(existingCard ? 200 : 201).json({
       status: existingCard ? "updated" : "imported",
       message: existingCard
-        ? `${importedPlayer.name} atualizado com dados do EFHub.`
-        : `${importedPlayer.name} importado e adicionado na sua colecao.`,
+        ? `${importedPlayer.name} atualizado no banco de cartas.`
+        : `${importedPlayer.name} salvo no banco e adicionado ao elenco para analise.`,
       player: importedPlayer,
       card: hydrateMyCard(card)
     });

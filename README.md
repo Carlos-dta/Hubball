@@ -46,11 +46,12 @@ Localmente, sem `DATABASE_URL`, o Hubball usa SQLite em `server/storage/hubball.
 ## O que ja funciona
 
 - Buscar cartas direto no EFHub pelo nome e importar o resultado escolhido.
-- Ver sua colecao como galeria de cartas.
-- Salvar cartas importadas e sua colecao em SQLite local com Drizzle, evitando perda ao reiniciar o servidor.
-- Selecionar uma carta da colecao para ver atributos, mapa de posicoes, habilidades e boosters.
+- Manter um Banco de cartas permanente, separado do elenco temporario usado nos prompts.
+- Montar e limpar o Elenco para analise sem apagar nenhuma carta do banco.
+- Salvar cartas importadas em SQLite local ou Postgres no Render, evitando perda ao reiniciar o servidor.
+- Selecionar uma carta do elenco para ver atributos, mapa de posicoes, habilidades e boosters.
 - Alternar entre atributos base e build MAX quando a carta importada tiver nivel maximo.
-- Adicionar/remover cartas da sua colecao.
+- Adicionar cartas do banco ao elenco e retira-las sem apagar os dados salvos.
 - Gerar e copiar um prompt completo para o ChatGPT analisar seu elenco.
 - Gerar um prompt compacto experimental de analise de elenco, com filtros, ordenacao, marcadores, copiar e baixar `.txt`.
 - Usar a tela "Laboratorio" para montar 2 ou mais escalacoes com formacao escolhida, 11 titulares, banco de 12 reservas, slots clicaveis, busca EFHub por posicao, botao experimental "Melhor EFHub" com analise de ate 10.000 cartas, ate 10 substitutos sugeridos por slot e prompt proprio da escalacao.
@@ -64,16 +65,26 @@ GET    /api/players?search=messi&position=SA
 GET    /api/players/:id
 GET    /api/efhub/search?q=messi&limit=24&page=1
 GET    /api/efhub/best-players?scan=10000
+GET    /api/card-library
 GET    /api/my-cards
 POST   /api/my-cards
+DELETE /api/my-cards
 DELETE /api/my-cards/:id
 POST   /api/exports/chatgpt
 POST   /api/import/efhub-link
 ```
 
-## Banco local
+## Banco de cartas e elenco para analise
 
-O banco fica em `server/storage/hubball.sqlite`. O Hubball verifica a carta pelo `playerId`: se ela ja existir, atualiza os dados importados; se nao existir, salva uma nova carta. A colecao tambem evita duplicidade por `playerId`.
+Localmente, o banco fica em `server/storage/hubball.sqlite`. No Render, os mesmos dados ficam no Postgres configurado em `DATABASE_URL`.
+
+O Hubball usa tres camadas:
+
+- `player_cards`: cache tecnico dos dados completos das cartas importadas.
+- `saved_cards`: Banco de cartas permanente do usuario.
+- `my_cards`: Elenco temporario usado pelos prompts.
+
+Limpar ou retirar cartas de `my_cards` nao remove nada de `saved_cards`. A carta continua no Banco de cartas e pode voltar ao elenco com um clique.
 
 ## Proximas etapas sugeridas
 

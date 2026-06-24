@@ -157,10 +157,28 @@ const api = {
     const response = await fetch("/api/my-cards");
     return readJson<MyCard[]>(response);
   },
+  async getCardLibrary() {
+    const response = await fetch("/api/card-library");
+    return readJson<PlayerCard[]>(response);
+  },
+  async addMyCard(playerId: string) {
+    const response = await fetch("/api/my-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId })
+    });
+    return readJson<MyCard>(response);
+  },
   async removeMyCard(cardId: string) {
     const response = await fetch(`/api/my-cards/${cardId}`, { method: "DELETE" });
     if (!response.ok) {
       throw new Error("Nao consegui remover essa carta.");
+    }
+  },
+  async clearMyCards() {
+    const response = await fetch("/api/my-cards", { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error("Nao consegui limpar o elenco para analise.");
     }
   },
   async exportPrompt(formation: string, objective: string) {
@@ -204,6 +222,8 @@ const api = {
 function App() {
   const [currentView, setCurrentView] = React.useState<AppView>("home");
   const [myCards, setMyCards] = React.useState<MyCard[]>([]);
+  const [cardLibrary, setCardLibrary] = React.useState<PlayerCard[]>([]);
+  const [librarySearch, setLibrarySearch] = React.useState("");
   const [selectedPlayerId, setSelectedPlayerId] = React.useState<string | null>(null);
   const [formation, setFormation] = React.useState("4-2-1-3");
   const [objective, setObjective] = React.useState("montar o melhor time titular, banco e prioridades de treino");
@@ -251,6 +271,19 @@ function App() {
   const [lineupPrompt, setLineupPrompt] = React.useState("");
 
   const collectionIds = React.useMemo(() => new Set(myCards.map((card) => card.playerId)), [myCards]);
+  const filteredLibrary = React.useMemo(() => {
+    const query = normalizeText(librarySearch.trim());
+
+    if (!query) {
+      return cardLibrary;
+    }
+
+    return cardLibrary.filter((player) =>
+      normalizeText(
+        [player.name, player.version, player.club, player.nationality, player.position, player.playStyle].join(" ")
+      ).includes(query)
+    );
+  }, [cardLibrary, librarySearch]);
   const selectedCard =
     myCards.find((card) => card.playerId === selectedPlayerId) ?? myCards[0] ?? null;
   const selectedPlayer = selectedCard?.player ?? null;
@@ -283,10 +316,11 @@ function App() {
 
     async function boot() {
       try {
-        const result = await api.getMyCards();
+        const [result, library] = await Promise.all([api.getMyCards(), api.getCardLibrary()]);
 
         if (!isActive) return;
         setMyCards(result);
+        setCardLibrary(library);
         setSelectedPlayerId(result[0]?.playerId ?? null);
       } catch (error) {
         setNotice(getErrorMessage(error));
@@ -433,7 +467,50 @@ function App() {
     try {
       await api.removeMyCard(cardId);
       setMyCards((current) => current.filter((card) => card.id !== cardId));
-      setNotice("Carta removida.");
+      setNotice("Carta retirada do elenco. Ela continua salva no banco de cartas.");
+    } catch (error) {
+      setNotice(getErrorMessage(error));
+    }
+  }
+
+  async function addLibraryCardToAnalysis(player: PlayerCard) {
+    if (collectionIds.has(player.id)) {
+      setSelectedPlayerId(player.id);
+      setNotice("Essa carta ja esta no elenco para analise.");
+      return;
+    }
+
+    try {
+      const card = await api.addMyCard(player.id);
+      setMyCards((current) => [card, ...current.filter((item) => item.playerId !== player.id)]);
+      setSelectedPlayerId(player.id);
+      setBuildMode(player.maxAttributes ? "max" : "base");
+      setNotice(`${player.name} adicionado ao elenco para analise.`);
+    } catch (error) {
+      setNotice(getErrorMessage(error));
+    }
+  }
+
+  async function clearAnalysisCollection() {
+    if (myCards.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Limpar o elenco para analise? As cartas continuarao salvas no Banco de cartas."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await api.clearMyCards();
+      setMyCards([]);
+      setSelectedPlayerId(null);
+      setPrompt("");
+      setAnalysisPrompt("");
+      setNotice("Elenco para analise limpo. O banco de cartas foi preservado.");
     } catch (error) {
       setNotice(getErrorMessage(error));
     }
@@ -885,6 +962,11 @@ function App() {
   }
 
   function applyImportedEfhubPlayer(result: { player: PlayerCard; card: MyCard | null }) {
+    setCardLibrary((current) => [
+      result.player,
+      ...current.filter((player) => player.id !== result.player.id)
+    ]);
+
     if (result.card) {
       const importedCard = result.card;
 
@@ -964,7 +1046,7 @@ function App() {
             </span>
             <span>
               <Database size={16} />
-              API local
+              {cardLibrary.length} salvas
             </span>
           </div>
         </div>
@@ -1062,14 +1144,27 @@ function App() {
 
           <section className="hub-layout">
             <div className="hub-main">
-              <section className="collection-panel" aria-label="Minha colecao">
-                <div className="section-title">
-                  <Shield size={18} />
-                  <h2>Minha Colecao</h2>
+              <section className="collection-panel" aria-label="Elenco para analise">
+                <div className="section-heading-row">
+                  <div className="section-title">
+                    <Shield size={18} />
+                    <h2>Elenco para analise</h2>
+                  </div>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={clearAnalysisCollection}
+                    disabled={myCards.length === 0}
+                  >
+                    <Trash2 size={17} />
+                    Limpar elenco
+                  </button>
                 </div>
 
                 {isLoading && <p className="empty-state">Carregando cartas...</p>}
-                {!isLoading && myCards.length === 0 && <p className="empty-state">Nenhuma carta na colecao.</p>}
+                {!isLoading && myCards.length === 0 && (
+                  <p className="empty-state">Nenhuma carta no elenco. Adicione cartas do banco para gerar os prompts.</p>
+                )}
 
                 <div className="collection-gallery">
                   {myCards.map((card) => (
@@ -1079,6 +1174,45 @@ function App() {
                       key={card.id}
                       onRemove={() => removeFromCollection(card.id)}
                       onSelect={() => setSelectedPlayerId(card.playerId)}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="library-panel" aria-label="Banco de cartas">
+                <div className="library-header">
+                  <div className="section-title">
+                    <Database size={18} />
+                    <h2>Banco de cartas</h2>
+                  </div>
+                  <span>{cardLibrary.length} cartas salvas</span>
+                </div>
+
+                <label className="search-field library-search">
+                  <Search size={18} />
+                  <input
+                    value={librarySearch}
+                    onChange={(event) => setLibrarySearch(event.target.value)}
+                    placeholder="Buscar no banco de cartas"
+                  />
+                </label>
+
+                {!isLoading && cardLibrary.length === 0 && (
+                  <p className="empty-state">As cartas importadas do EFHub ficarao salvas aqui.</p>
+                )}
+                {cardLibrary.length > 0 && (
+                  <div className="result-count">
+                    Mostrando {filteredLibrary.length} de {cardLibrary.length} cartas
+                  </div>
+                )}
+
+                <div className="library-gallery">
+                  {filteredLibrary.map((player) => (
+                    <LibraryTile
+                      isInAnalysis={collectionIds.has(player.id)}
+                      key={player.id}
+                      onAdd={() => addLibraryCardToAnalysis(player)}
+                      player={player}
                     />
                   ))}
                 </div>
@@ -1181,7 +1315,7 @@ function App() {
                 </section>
               </>
             ) : (
-              <p className="empty-state">Selecione uma carta da colecao.</p>
+              <p className="empty-state">Adicione uma carta do banco ao elenco para ver os detalhes.</p>
             )}
           </section>
         </div>
@@ -1691,6 +1825,42 @@ function CollectionTile({
       </button>
       <button className="icon-button collection-remove" type="button" aria-label={`Remover ${player.name}`} onClick={onRemove}>
         <Trash2 size={17} />
+      </button>
+    </article>
+  );
+}
+
+function LibraryTile({
+  isInAnalysis,
+  onAdd,
+  player
+}: {
+  isInAnalysis: boolean;
+  onAdd: () => void;
+  player: PlayerCard;
+}) {
+  return (
+    <article className="library-tile">
+      <div className="library-card-art">
+        {player.imageUrl ? <img src={player.imageUrl} alt="" /> : <CardMini player={player} />}
+        <span className="collection-rating">
+          <b>{getCardRating(player)}</b>
+          <small>{player.position}</small>
+        </span>
+      </div>
+      <div className="library-card-meta">
+        <strong>{player.name}</strong>
+        <span>{player.version}</span>
+        <small>{player.playStyle}</small>
+      </div>
+      <button
+        className={isInAnalysis ? "library-card-status" : "icon-button"}
+        type="button"
+        aria-label={isInAnalysis ? `${player.name} ja esta no elenco` : `Adicionar ${player.name} ao elenco`}
+        onClick={onAdd}
+        disabled={isInAnalysis}
+      >
+        {isInAnalysis ? "No elenco" : <Plus size={17} />}
       </button>
     </article>
   );

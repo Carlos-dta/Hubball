@@ -164,6 +164,7 @@ button:disabled {
 
 .import-command,
 .collection-panel,
+.library-panel,
 .detail-pane,
 .export-pane .panel-section {
   border: 1px solid var(--line);
@@ -324,10 +325,31 @@ button:disabled {
 }
 
 .collection-panel,
+.library-panel,
 .panel-section {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.section-heading-row,
+.library-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.library-header > span {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #101412;
+  color: var(--cyan);
+  font-size: 0.84rem;
+  font-weight: 850;
 }
 
 .section-title {
@@ -348,6 +370,88 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
   gap: 12px;
+}
+
+.library-search {
+  max-width: 460px;
+}
+
+.library-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.library-tile {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  min-height: 98px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111512;
+}
+
+.library-card-art {
+  position: relative;
+  display: grid;
+  width: 68px;
+  height: 82px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0b0e0d;
+}
+
+.library-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.library-card-art .collection-rating {
+  bottom: 4px;
+  left: 4px;
+}
+
+.library-card-meta {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.library-card-meta strong,
+.library-card-meta span,
+.library-card-meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-meta span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.library-card-meta small {
+  color: var(--cyan);
+}
+
+.library-card-status {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid rgba(32, 216, 122, 0.38);
+  border-radius: 6px;
+  background: rgba(32, 216, 122, 0.08);
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 850;
 }
 
 .collection-tile {
@@ -1807,6 +1911,10 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .library-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .attribute-row {
     grid-template-columns: minmax(100px, 1fr) 68px 34px;
   }
@@ -1841,6 +1949,7 @@ button:disabled {
 @media (max-width: 460px) {
   .efhub-result-grid,
   .collection-gallery,
+  .library-gallery,
   .analysis-grid,
   .analysis-actions,
   .lineup-comparison-grid,
